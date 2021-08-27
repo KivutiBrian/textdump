@@ -26,6 +26,10 @@ class DisposableBooking(db.Model):
         return cls.query.filter_by(email=email).first()
 
     @classmethod
+    def check_email_exists_in_disposable(cls, email, disposable_id):
+        return cls.query.filter_by(email=email, disposable_id=disposable_id).first()
+
+    @classmethod
     def fetch_by_disposable_id(cls, id):
         r = cls.query.filter_by(disposable_id=id).all()
         return r

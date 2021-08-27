@@ -3,6 +3,7 @@ from flask import Flask, request, render_template, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
+from sqlalchemy.sql.functions import func
 import os
 
 from utils import file_uploader
@@ -30,7 +31,9 @@ from models.biashara import Biashara
 from models.disposable import Disposable
 from models.disposable_booking import DisposableBooking
 
-
+@app.before_first_request
+def create_tables():
+    db.create_all()
 
 # context processor
 @app.context_processor
@@ -149,13 +152,20 @@ def dashboard():
     if session:
         logged_in = session['logged_in']
         first_name = session['first_name']
-        user_id = session['user_id'] 
-
+        user_id = session['user_id']
 
         records = Biashara.user_biashara(user_id)
-        
 
-        return render_template("backend/dashboard.html", logged_in=logged_in, first_name=first_name, biz=len(records))
+        # sale_per_item = Sale.query.with_entities(Product.name, func.sum(Sale.quantity_sold)).join(Product).group_by(Product.name).all()
+        disposables_per_biashara = Disposable.query.with_entities(Biashara.name, func.count(Disposable.title)).join(Biashara).group_by(Biashara.name).all()
+
+        bar_labels = []
+        bar_values = []
+        for label, value in disposables_per_biashara:
+            bar_labels.append(label)
+            bar_values.append(value)        
+
+        return render_template("backend/dashboard.html", logged_in=logged_in, first_name=first_name, biz=len(records), bar_labels = bar_labels, bar_values = bar_values)
     else:
         flash("session expired", "danger")
         return redirect(url_for("login"))
@@ -261,8 +271,7 @@ def biashara_id(id):
 
         biashara = Biashara.get_biashara_by_id(id)
         disposables = Disposable.fetch_by_biashara_id(id=id)
-        return render_template("backend/manage_biashara.html", id=id, bizname=biashara.name,
-                                disposables=disposables, biz_id=id, logged_in=logged_in, first_name=first_name)
+        return render_template("backend/manage_biashara.html", id=id, bizname=biashara.name, disposables=disposables, biz_id=id, logged_in=logged_in, first_name=first_name)
 
     else:
         flash("session expired", "danger")
@@ -316,7 +325,11 @@ def book(id):
         contact = request.form["contact_number"]
 
         # check if the email has made the booking before
-        if DisposableBooking.check_email_exists(email):
+        # if DisposableBooking.check_email_exists(email):
+        #     flash("email already has a booking")
+        #     return redirect(url_for("explore"))
+
+        if DisposableBooking.check_email_exists_in_disposable(email,id):
             flash("email already has a booking")
             return redirect(url_for("explore"))
 
